@@ -1,0 +1,256 @@
+---
+title: "reporte_analisis"
+author: "Prato-Carrero"
+date: "22 de enero de 2016"
+output: html_document
+---
+
+En el presente informe se procedera a explicar el uso de los metodos exploratorios y de analisis:
+
+ Análisis de Componentes Principales.
+ Clasificación jerárquica.
+ Clusterización con K-medias.
+
+Para ello cargamos las librerias necesarias:
+
+```{r}
+library(tm)
+library(FactoMineR)
+```
+
+
+Al conjunto de datos anteriormente preprocesados y explicado dicho procedimiento en el archivo analisis_preprocesamiento.Rmd
+
+Justificacion y Conclusiones asociadas a los procedimientos aplicados:
+
+Analisis de Componentes Principales
+
+Primero procederemos a cargar la data anteriormente preprocesada y sobre ella remover terminos sparse dentro de la matrix ya que muchos valores son nulos.
+
+
+```{r}
+load("C:/Users/Prato/Documents/tarea1/data/datalimpia.RData")
+load("C:/Users/Prato/Documents/tarea1/data/tw.RData")
+clxmatrix <- removeSparseTerms(tdm, sparse = 0.998) #0.998 para 878 terminos mientras mayor el porcentaje mas palabras
+
+```
+
+De esta manera podemos comparar ambas matrices y notar la diferencia en cantidad de terminos esparcidos, recalcando que hemos considerado para nuestro estudio una nube de 839 palabras.
+
+```{r}
+tdm
+clxmatrix
+```
+
+Acontinuacion necesitamos tener este nuevo subconjunto generado en una estructura manejable, asi pues, lo convertimos a una matrix.
+
+```{r}
+Datos <- as.matrix(clxmatrix)
+```
+
+Hemos de recalcar que la manera en la que se encuentra hasta el momento nuestra matrix esta representada de la forma filas:palabras, columnas:documentos, por lo tanto, cambiando filas por columnas para tener organizada la data de la manera en que la necesitamos filas:documentos, columnas:palabras y renombrando a los documentos con los nombres de los usuarios a los cuales pertenecen tendremos la matrix bien representada.
+
+```{r}
+Datos <- t(Datos)
+rownames(Datos)<-c(tw$screenName)
+```
+
+Ahora procederemos a calcular los componentes principales en un nueva variable llamada modelo, considerando 3 componentes para nuestro estudio.
+
+```{r}
+modelo <- PCA(Datos, scale.unit = TRUE, ncp = 3, graph = FALSE)
+```
+
+Veamos el modelo.
+
+```{r}
+modelo
+```
+
+Podemos observar informacion mas detallada aun sobre nuestro modelo generado.
+Acontinuacion se listas algunas de las caracteristicas asociadas a algunos subconjuntos pertenecientes a dicho modelo.
+
+Veamos los componentes por variables
+
+```{r}
+tail(modelo$var$coord,n=10)
+```
+
+Veamos los componentes. por individuo
+
+```{r}
+tail(modelo$ind$coord,n=10) 
+```
+
+
+Veamos la representatividad de los individuos.
+
+```{r}
+ tail(modelo$ind$cos2,n=10)
+```
+
+Pero que nos interesa realmente del modelo?
+
+Sin duda alguna su representacion y visualizacion en el espacio, el cual nos dara una idea visual del comportamiento de los datos(palabras) asociadas a los individuos.
+
+Haremos pues una combinacion de los diversos componentes para verificar el comportamiento.
+
+Graficamos el plano principal y el círculo de correlaciones por separado para las componentes principales 1 y 2.
+
+```{r}
+par(mfrow = c(1, 2)) # dividimos la pantalla para recibir dos gráficos
+plot(modelo, axes = c(1, 2), choix = "ind", col.ind = "red", new.plot = TRUE)
+plot(modelo, axes = c(1, 2), choix = "var", col.var = "blue", new.plot = TRUE) 
+```
+
+
+Graficamos el plano principal y el círculo de correlaciones por separado para las componentes principales 1 y 3.
+
+```{r}
+par(mfrow = c(1, 2)) # dividimos la pantalla para recibir dos gráficos
+plot(modelo, axes = c(1, 3), choix = "ind", col.ind = "red", new.plot = TRUE)
+plot(modelo, axes = c(1, 3), choix = "var", col.var = "blue", new.plot = TRUE)
+```
+
+Graficamos el plano principal y el círculo de correlaciones por separado para las componentes principales 2 y 3
+
+```{r}
+par(mfrow = c(1, 2)) # dividimos la pantalla para recibir dos gráficos
+plot(modelo, axes = c(2, 3), choix = "ind", col.ind = "red", new.plot = TRUE)
+plot(modelo, axes = c(2, 3), choix = "var", col.var = "blue", new.plot = TRUE)
+```
+
+Sin duda alguna la grafica mejor representada es la asociada a a los componentes 1 y 2 , por el hecho de contener la mayor cantidad de informacion.
+
+Asi pues podemos evidenciar de manera visual que en base a la relacion palabras-individuso podriamos considerar la formacion o presencia de 3 a 4 grupos dentro de nuestro modelo.
+
+Otros datos interesantes y de gran importancia son representados por:
+
+Como sabemos que individuos estan mal representados en el modelo?
+
+Se consideran mal representados los cos2 < 60%
+
+De esta manera la Gráfica de los individuos que tengan cos2 >= 0.7 (70%) considerados bien representados esta dada por:
+
+```{r}
+par(mfrow = c(1, 1))
+plot(modelo, axes = c(1, 2), choix = "ind", col.ind = "red", new.plot = TRUE, select = "cos2 0.7")
+```
+
+De igual manera , surge otra interrogante 
+
+Como sabemos que variables estan mal representados en el modelo?
+
+Se consideran mal representados los cos2 < 60%
+
+De esta manera la Gráfica de los variables que tengan cos2 >= 0.9 (90%) considerados bien representados esta dada por:
+
+```{r}
+plot(modelo, axes = c(1, 2), choix = "var", col.var = "blue", new.plot = TRUE, select = "cos2 0.9")
+```
+
+Realicemos ahora nuestro segundo analisi, acorde al segundo algoritmo o conocido como: 
+
+- Metodo de Clasificacion Jerarquica
+
+Primero obtenemos una muestra considerable de los individuos para clasificarlos acorde a las palabras presentes en sus tweets, esta seleccion la realizamos por dos motivos diferentes.
+
+1.- El lenguaje R no nos permitio cargar una matrix de tamaño muy grande para realizar el estudio.
+
+2.- Para tener una mejor visualizacion de la data al momento de graficar.
+
+```{r}
+HDatos <- head(Datos,n=13)
+```
+
+Seguidamente calculamos nuevamente los componentes principales de esta nueva muestra.
+
+```{r}
+modelo2 <- PCA(HDatos, scale.unit = TRUE, ncp = 3, graph = FALSE)
+```
+
+Procedemos a aplicar el metodo al nuevo modelo, y asi obtenemos las clasificaciones:
+
+```{r}
+res.hcpc <- HCPC(modelo2, nb.clust = -1, consol = TRUE, min = 3, max = 3, graph = FALSE)
+res.hcpc
+```
+
+ 
+ De igual manera para este estudio, nos interesa principalmente evidenciar la representacion grafica , ya que es esta, la que nos da los cluster generados en la data, agrupando a los individuos acorde al uso de palabras presentes en sus tweets.
+ 
+ Graficando los cluster con el árbol clasificador
+
+```{r} 
+plot(res.hcpc, axes=c(1,2), choice="tree", rect=TRUE,
+draw.tree=TRUE, ind.names=TRUE, t.level="all", title=NULL,
+new.plot=FALSE, max.plot=15, tree.barplot=TRUE,
+centers.plot=FALSE)
+```
+
+Otra manera de visualizar:
+
+Graficando los cluster con el árbol clasificador en 3D.
+
+```{r}
+ plot(res.hcpc, axes=c(1,2), choice="3D.map", rect=TRUE,
+draw.tree=TRUE, ind.names=TRUE, t.level="all", title=NULL,
+new.plot=FALSE, max.plot=15, tree.barplot=TRUE,
+centers.plot=FALSE)
+```
+
+Concluyendo, es facil evidenciar la presencia de 3 cluster formados al aplicar el metodo de clasificacion jerarquica de igual manera en la relacion documentos(individuos)-variables(palabras) presentes en sus tweets, aunque la muestra es un poco reducida , es facil observar que la tendencia sera que el grupo al cual tiene mas individuos seguira teniendo muchos mas que los otros dos grupos aun y cuando todos iran aumentando en tamaño mientras mas grande sea considerada la muestra tomada.
+
+
+Para el ultimo analisis procederemos a aplicar el Metodo Clusterización con K-medias.
+
+Lo primero que realizaremos sera seleccionar los componentes y almacenamos para poder ser procesados.
+
+```{r}
+Datoscomponentes <- modelo$ind$coord
+```
+
+Luego, surge una inquietud, cual sera el K necesario asociado a la cantidad de grupos que pretendemos buscar?
+
+Pues el siguiente algoritmo nos ayuda a visualizar de manera correcta dicho valor, el pto donde no se evidencia un cambio drastico sera el propicio.
+
+Entonces aplicamos la Selección de K mediante el "Codo de Jambu"
+
+```{r}
+InerciaIC = rep(0, 30)
+for (k in 1:30) {
+    grupos = kmeans(Datoscomponentes, k)
+    InerciaIC[k] = grupos$tot.withinss
+}
+plot(InerciaIC, col = "blue", type = "b")
+```
+
+Se puede observar que un k valido en este caso es de 3, ya que representa el valor mas optimo, tendria todo el sentido del mundo ademas ya que el metodo de clasificacion jerarquica nos arrojo de igual manera tres cluster distintos.
+
+Sabiendo esto simplemente ejecutamos el metodo con la funcion kmeans del paquete base stats
+
+```{r}
+grupos <- kmeans(Datos, 3, iter.max = 100) #debe de ser sobre el PCA
+```
+
+Volvemos al pto de interes, graficaremos el modelo obtenido para poder evidenciar los resultados.
+
+Graficamos los cluster generados y sus centros.
+
+```{r}
+plot(Datoscomponentes, pch = 19)
+points(grupos$centers, pch = 19, col = "blue", cex = 2)
+points(Datoscomponentes, col = grupos$cluster + 1, pch = 19)
+```
+
+A simple vista podemos observar la presencia de al menos dos o tres grupos acorde a los centros generados (ptos azules), sin embargo , existen algunos ptos aislados en la grafica, los mismos son aquellos hemos mencionado anteirormente las cuales son valores atipicos o simplemente estan mal representados en el modelo.
+
+
+Por ultimo, procederemos guardando la tabla de datos mas una columna con el cluster al que pertenece cada individuo.
+
+```{r}
+NDatos <- cbind(Datoscomponentes, Grupo = grupos$cluster)
+head(NDatos,n=5)
+```
+
+De esta manera se puede concluir considerando que al aplicar los diferentes metodos propuestos y un conjunto de datos mayor o menor varia de forma notable la representacion, mas sin embargo, la tendencia sera de clasificar al conjunto en 2 o 3 grupos directamente relacionado a la data fuente, asi se damos por culminado la justificacion y analisis de los resultados.

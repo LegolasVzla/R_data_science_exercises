@@ -1,0 +1,187 @@
+---
+title: "reporte_preprocwsamiento"
+author: "Prato-Carrero"
+date: "21 de enero de 2016"
+output: html_document
+---
+
+Para el presente informe se omitira la explicacion de la instalacion de las librerias usadas al momento de llevar a cabo el preprocesamiento de la data, dichas librerias son:
+
+-ProjectTemplate
+-tm
+-FactoMineR
+-ggplot2
+
+Establecidas por defecto y configuradas en el archivo global.dcf de la carpeta config.
+
+
+```{r}
+library(tm)
+library(FactoMineR)
+```
+
+Justificacion de Pasos realizados:
+
+
+La primera decision que se llevo a cabo fue realizar el cambio al directorio de trabajo a la ubicacion donde se encuentra el proyecto creado con la ejecucion del comando:
+
+```{r}
+setwd("~/tarea1")
+```
+
+Acontinuacion Obtenemos el listado de tweets en la variable mydata, de la data proporcionado la cual se encuentra en la columna text.
+
+```{r}
+load("C:/Users/Prato/Documents/tarea1/data/tw.RData")
+mydata <- tw$text
+```
+
+Para poder realizar un analisis valido sobre el conjunto de datos, primero procederemos a ejecutar el procesamiento para la limpieza de dichos tweets en una serie de comandos listados acontinuacion:
+
+1.- Quitamos los acentos encontrados en las palabras con el fin de estandarizar y asi desperdiciar data, asumiendo que solo las vocales pueden estar acentuadas.
+
+```{r}
+mydata <- gsub("á","a",mydata)
+mydata <- gsub("é","e",mydata)
+mydata <- gsub("í","i",mydata)
+mydata <- gsub("ó","o",mydata)
+mydata <- gsub("ú","u",mydata)
+
+mydata <- gsub("Á","A",mydata)
+mydata <- gsub("É","E",mydata)
+mydata <- gsub("Í","I",mydata)
+mydata <- gsub("Ó","O",mydata)
+mydata <- gsub("Ú","U",mydata)
+```
+
+
+2.- Realizamos la conversion a formato ASCII de la data (tweets), con el fin de codificar la data de manera manejable para las posteriores acciones.
+
+```{r}
+mydata = iconv(mydata, to="ASCII//TRANSLIT")
+```
+
+3.- Se remueven el listado de  retweets ya que para nuestro posterior estudio no nos interesara considerarlos.
+
+```{r}
+txtclean = gsub("(RT|via)((?:\\b\\W*@\\w+)+)", "", mydata)
+```
+
+4.- De igual manera procedemos a remover lo que consideramos como  @otragente dentro de los tweets.
+
+```{r}
+txtclean = gsub("@\\w+", "", txtclean)
+```
+
+Hasta el momento se han realizado la limpieza de algunas caracteristicas en particular, sin embargo, es necesario realizar otro tipo de procesamiento, la construccion de un corpus (Cuerpo), que es un tipo de dato especifico nos permitira la manipulacion para el tratado de la data que resta.
+
+Esto se lleva a cabo mediante el comando:
+
+```{r}
+corpus <- Corpus(VectorSource(mydata), readerControl = list(language = "es"))
+```
+
+5.- Se realiza la conversion de cada una de las palabras a minúsculas con el fin de estandarizar las mismas.
+
+```{r}
+txtclean <- tm_map(corpus, content_transformer(tolower))
+```
+
+6.- Procedemos a eliminar URLs presentes, ya que no son de importancia para nuestros analisis.
+
+```{r}
+removeURL <- function(x) gsub("http[^[:space:]]*", "", x)
+txtclean <- tm_map(txtclean, content_transformer(removeURL),lazy=TRUE)
+```
+
+7.- Seguidamente procedemos a eliminar los numeros, debido a la misma causa.
+
+```{r}
+ txtclean <- tm_map(txtclean,content_transformer(removeNumbers))
+```
+
+8.- Eliminamos los signos de puntuacion que no son necesarios.
+
+```{r}
+txtclean <- tm_map(txtclean,content_transformer(removePunctuation))
+```
+
+
+9.- Uno de los pasos de mayor interes, sin quitar importancia a los demas, es el de eliminan las palabras comunes que no son de gran importancia tanto para el idioma ingles como para el español, ejem , articulos , entre otras.
+
+Para ello se utilizan las siguientes funciones, recalcando que para cada una de ellas R almacena un conjunto variado de dichas palabras consideradas comunes.
+
+```{r}
+txtclean <- tm_map(txtclean,content_transformer(removeWords),stopwords("spanish"))
+txtclean <- tm_map(txtclean,content_transformer(removeWords),stopwords("english"))
+```
+
+
+10.- Ademas, con el fin de garantizar una buena limpieza de los datos se eliminan las etiquetas y el listado de los caracteres del alfabeto, debido a la manera de escritura de los tweets por parte de los usuarios.
+
+```{r}
+txtclean <- tm_map(txtclean, content_transformer(removeWords), c("6d","rt","a","b","c","d","e","f","g","h","i","j","k","l","m","n","ñ","o","p","q","r","s","t","u","v","w","x","y","z")) 
+```
+
+11.- Eliminaremos los espacios en blanco innecesarios producto de la eliminacion de las palabras comunes.
+
+```{r}
+txtclean <- tm_map(txtclean, content_transformer(stripWhitespace))
+```
+
+12.- Se realiza el proceso de lematizacion, mediante el cual se considera la raiz de cada palabra de la data hasta el momento, y se unifican.
+
+
+```{r}
+txtclean <- tm_map(txtclean, stemDocument, language = "spanish")
+```
+
+13.- Por ultimo convertimos ya nuestro conjunto de datos resultantes en un texto plano para ser almacenado posteriormente.
+
+```{r}
+txtclean <- tm_map(txtclean, PlainTextDocument)
+```
+
+En este punto podemos decir que se concluyo con la limpieza de los datos, todos estos procedimientos aplicados al conjunto representan los pasos basicos para el preprocesamiento de la data en cualquier estudio asociado a los tweets, sin embargo, debemos almacenar la misma, en una estructura que nos permita realizar el estudio de los metodos de analisis.
+
+Esta estructura es conocida como Document-Term Matrix, y para ello procedemos a ejecutar:
+ 
+```{r}
+tdm <- TermDocumentMatrix(txtclean,control=list(wordLengths = c(1, Inf)))
+```
+
+Por ultimos consideraremos almacenar y salvar las estructuras generadas y de relevancia, por lo tanto se  convierte la Document-Term Matrix a una matriz manipulable.
+
+```{r}
+mymatrix = as.matrix(tdm)
+```
+
+Luego generamos algunos datos relevantes para ello, contamos la frecuencia de las palabras  y la almacenamos en una nueva variable en forma decreciente.
+
+```{r}
+wf <- sort(rowSums(mymatrix),decreasing=TRUE)
+```
+
+De esta manera consideramos pues, que palabras con frecuencia menor a 10 no tendran gran relevancia en nuestro estudio, asi, procederemos a eliminar palabras con baja frecuencia.
+
+Y ademas obtendremos el conjunto de las palabras mas usadas, considerando >= 5% de frecuencia en dichas palabras.
+
+```{r}
+wf <- subset(wf, wf >= 10) 
+wf2 <- subset(wf, wf >= 300)
+```
+
+Crearemos los dataframes asociados a los conjuntos calculodos anteriormente.
+
+```{r}
+dm <- data.frame(word = names(wf), freq=wf)
+dm2 <- data.frame(word = names(wf2), freq=wf2)
+```
+
+Finalizando, guardaremos los datos con el fin de tener un respaldo de los mismos.
+
+Este directorio se encuentra en las carpetas creadas por ProjecTemplate.
+
+save(dm,dm2,tdm,file="data/datalimpia.RData")
+
+De esta manera se da por culminado el preprocesamiento de la data asociado a los tweets contenida en un principio en el archivo tw.R
